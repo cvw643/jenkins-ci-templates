@@ -1,0 +1,60 @@
+pipeline {
+  agent any
+  stages {
+    stage('deploy app to remote server') {
+      steps {
+        script {
+          def remoteConfig = [:]
+          remoteConfig.name = "aliyun-dev-server"
+          remoteConfig.host = "${REMOTE_HOST}"
+          remoteConfig.port = "${REMOTE_SSH_PORT}".toInteger()
+          remoteConfig.allowAnyHosts = true
+
+          withCredentials([
+            sshUserPrivateKey(
+              credentialsId: "${REMOTE_CRED}",
+              keyFileVariable: "privateKeyFilePath"
+            ),
+            usernamePassword(
+              credentialsId: "${CODING_CREDENTIALS_ID}",
+              usernameVariable: 'CODING_DOCKER_REG_USERNAME',
+              passwordVariable: 'CODING_DOCKER_REG_PASSWORD'
+            )
+          ]) {
+            // SSH 登陆用户名
+            remoteConfig.user = "${REMOTE_USER_NAME}"
+            // SSH 私钥文件地址
+            remoteConfig.identityFile = privateKeyFilePath
+
+            // 请确保远端环境中有 Docker 环境
+            sshCommand(
+              remote: remoteConfig,
+              command: "docker login -u ${CODING_DOCKER_REG_USERNAME} -p ${CODING_DOCKER_REG_PASSWORD} ipi-bj-docker.pkg.coding.net",
+              sudo: true,
+            )
+
+            sshCommand(
+              remote: remoteConfig,
+              command: "docker rm -f ${CONTAINER_NAME} | true",
+              sudo: true,
+            )
+
+            sshCommand(
+              remote: remoteConfig,
+              command: "docker image prune -af",
+              sudo: true,
+            )
+
+            sshCommand(
+              remote: remoteConfig,
+              command: "docker run -d -p ${CONTAINER_PORT}:${CONTAINER_PORT} --name ${CONTAINER_NAME} ipi-bj-docker.pkg.coding.net/${DOCKER_IMAGE} --spring.cloud.bootstrap.enabled=true --spring.application.name=${CONTAINER_NAME} --spring.cloud.nacos.config.server-addr=${NACOS_SERVER}",
+              sudo: true,
+            )
+
+          }
+        }
+
+      }
+    }
+  }
+}
