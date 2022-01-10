@@ -1,0 +1,22 @@
+pipeline {
+  agent any
+  stages {
+    stage('检出') {
+      steps {
+        checkout([$class: 'GitSCM',
+        branches: [[name: GIT_BUILD_REF]],
+        userRemoteConfigs: [[
+          url: GIT_REPO_URL,
+          credentialsId: CREDENTIALS_ID
+        ]]])
+      }
+    }
+    stage('推送到 CODING Maven 制品库') {
+      steps {
+        echo '发布中...'
+        sh 'mvn deploy -s ./ci_settings.xml -DskipTests --update-snapshots'
+        echo '发布完成.'
+      }
+    }
+  }
+}
